@@ -70,11 +70,11 @@ export const paymentVerfication = async (req, res) => {
 
   if (isAuthentic) {
     return res.redirect(
-      `https:/naad.netlify.app/paymentSuccess?reference=${razorpay_payment_id}`
+      `https://naad-backend-tvjv.onrender.com/naad.netlify.app/paymentSuccess?reference=${razorpay_payment_id}`
     );
   } else {
     return res.redirect(
-      `https:/naad.netlify.app/paymentFailure?reference=${razorpay_payment_id}`
+      `https://naad-backend-tvjv.onrender.com/naad.netlify.app/paymentFailure?reference=${razorpay_payment_id}`
     );
   }
 };
