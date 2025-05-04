@@ -7,7 +7,7 @@ const check = async (req, res) => {
     res.status(200);
     res.send("Welcome to checking of Server");
   } catch (error) {
-    console.log(error.message);
+    //console.log(error.message);
     res.json({ success: false, message: error.message });
   }
 };
@@ -33,7 +33,7 @@ const addStudent = async (req, res) => {
     const result = await cloudinary.uploader.upload(image, {
       resource_type: "image",
     });
-    console.log("Upload Success:", result);
+    //console.log("Upload Success:", result);
 
     // Validate if required fields are provided
     if (
@@ -52,18 +52,18 @@ const addStudent = async (req, res) => {
     }
 
     // Logging the student data to be added
-    console.log(
-      "Student data::",
-      firstname,
-      middlename,
-      lastname,
-      address,
-      contact,
-      dob,
-      doj,
-      year,
-      result.url
-    );
+    // console.log(
+    //   "Student data::",
+    //   firstname,
+    //   middlename,
+    //   lastname,
+    //   address,
+    //   contact,
+    //   dob,
+    //   doj,
+    //   year,
+    //   result.url
+    // );
 
     const studentData = {
       firstname,
@@ -83,13 +83,13 @@ const addStudent = async (req, res) => {
     // Saving the student data to MongoDB
     await newStudent.save();
 
-    console.log("Student Added");
+    //console.log("Student Added");
 
     // Responding with a success message
     res.json({ success: true, message: "Student added successfully" });
   } catch (error) {
     // Log error message for debugging purposes
-    console.log("Error while adding student: ", error.message);
+    //console.log("Error while adding student: ", error.message);
 
     // Handle errors gracefully
     if (error.name === "ValidationError") {
@@ -115,7 +115,7 @@ const getStudents = async (req, res) => {
     const students = await studentModel.find({});
     res.json({ success: true, students });
   } catch (error) {
-    console.log(error);
+    //console.log(error);
     res.json({ success: false, message: error.message });
   }
 };
@@ -126,7 +126,7 @@ const viewStudent = async (req, res) => {
     const profile = await studentModel.findById(id);
     res.json({ success: true, profile });
   } catch (error) {
-    console.log(error);
+    //console.log(error);
     res.json({ success: false, message: error.message });
   }
 };
@@ -179,9 +179,9 @@ const editStudent = async (req, res) => {
       };
     }
 
-    console.log(updatedData);
+    //console.log(updatedData);
 
-    console.log("Before update:", await studentModel.findById(id));
+    //console.log("Before update:", await studentModel.findById(id));
     const student = await studentModel.findByIdAndUpdate(id, updatedData, {
       new: true,
       runValidators: true,
@@ -190,7 +190,7 @@ const editStudent = async (req, res) => {
     if (!student) {
       res.json({ success: false, message: "Student not found" });
     } else {
-      console.log("After update:", student);
+      //console.log("After update:", student);
       res.json({
         success: true,
         student,
@@ -198,8 +198,8 @@ const editStudent = async (req, res) => {
       });
     }
   } catch (error) {
-    console.log(error);
-    console.log("Error while adding");
+    //console.log(error);
+    //console.log("Error while adding");
     res.json({ success: false, message: error.message });
   }
 };
@@ -210,8 +210,8 @@ const setStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body; // active or inactive
 
-    console.log("student id" + id);
-    console.log("status:" + status);
+    //console.log("student id" + id);
+    //console.log("status:" + status);
     if (!status) {
       return res
         .status(400)
@@ -236,7 +236,7 @@ const setStatus = async (req, res) => {
       student: updatedStudent,
     });
   } catch (error) {
-    console.error("Error updating student status:", error);
+    //console.error("Error updating student status:", error);
     res.status(500).json({ success: false, message: "Internal server error." });
   }
 };
@@ -250,7 +250,7 @@ const deleteStudent = async (req, res) => {
     }
     res.json({ success: true, message: "Student deleted successfully" });
   } catch (error) {
-    console.log(error);
+    //console.log(error);
     res.json({ success: false, message: error.message });
   }
 };

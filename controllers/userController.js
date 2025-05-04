@@ -1,9 +1,9 @@
 import userModel from "../models/userModel.js";
 
 const createUser = async (req, res) => {
-  console.log("Logging request body", req.body);
+  //console.log("Logging request body", req.body);
   const { username, password, student_id } = req.body;
-  console.log("here");
+  //console.log("here");
   const userData = {
     username,
     password,
@@ -23,7 +23,7 @@ const createUser = async (req, res) => {
   // Saving the student data to MongoDB
   await newUser.save();
 
-  console.log("User Creds have been created", newUser);
+  //console.log("User Creds have been created", newUser);
 
   // Responding with a success message
   res.json({ success: true, message: "Creds have been generated", newUser });
@@ -54,7 +54,7 @@ const login = async (req, res) => {
       });
     }
   } catch (error) {
-    console.log(error);
+    //console.log(error);
     res.json({ success: false, message: error.message });
   }
 };
@@ -96,7 +96,7 @@ const resetCreds = async (req, res) => {
       .status(200)
       .json({ success: true, message: "Credentials reset successfully!" });
   } catch (error) {
-    console.error("Error resetting credentials:", error);
+    //console.error("Error resetting credentials:", error);
     res.status(500).json({ success: false, message: "Internal Server Error." });
   }
 };

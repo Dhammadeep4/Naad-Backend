@@ -24,7 +24,7 @@ export const getKey = async (req, res) => {
 
 //below controller is to update payment in db
 export const updateDB = async (req, res) => {
-  console.log("Logging request body", req.body);
+  //console.log("Logging request body", req.body);
   const { payment_id, student_id, mode, receipt, amount } = req.body;
 
   const paymentData = {
@@ -47,7 +47,7 @@ export const updateDB = async (req, res) => {
   // Saving the student data to MongoDB
   await newPayment.save();
 
-  console.log("Payment has been Added", newPayment);
+  //console.log("Payment has been Added", newPayment);
 
   // Responding with a success message
   res.json({ success: true, message: "Payment has been updated", newPayment });
@@ -85,7 +85,7 @@ export const getAllHistory = async (req, res) => {
     const history = await paymentModel.find({});
     res.json({ success: true, history });
   } catch (error) {
-    console.log(error);
+    //console.log(error);
     res.json({ success: false, message: error.message });
   }
 };
@@ -108,7 +108,7 @@ export const getHistoryByStudentId = async (req, res) => {
       history,
     });
   } catch (error) {
-    console.error("Error fetching history:", error.message);
+    //console.error("Error fetching history:", error.message);
     res.status(500).json({
       success: false,
       message: "Server Error",
@@ -117,7 +117,7 @@ export const getHistoryByStudentId = async (req, res) => {
 };
 export const getReceipt = async (req, res) => {
   const { payment_id } = req.params;
-  console.log(payment_id);
+  //console.log(payment_id);
   try {
     const data = await paymentModel.find({ payment_id });
 
@@ -133,6 +133,6 @@ export const getReceipt = async (req, res) => {
       receipt: data[0].receipt,
     });
   } catch (error) {
-    console.log(error.message);
+    //console.log(error.message);
   }
 };

@@ -27,14 +27,14 @@ const updateFees = async (req, res) => {
       registration: Number(registration),
     };
 
-    console.log(req.body);
+    //console.log(req.body);
     // Creating a new fee document
     const updatedFee = await feesModel.findOneAndReplace({}, feeData, {
       upsert: true,
       new: true,
     });
 
-    console.log("Fee Added");
+    //console.log("Fee Added");
 
     // Responding with a success message
     res.json({
@@ -43,7 +43,7 @@ const updateFees = async (req, res) => {
       data: updatedFee,
     });
   } catch (error) {
-    console.log(error.message);
+    //console.log(error.message);
     res.status(500).json({
       success: false,
       message: "Failed to add fee",
@@ -58,7 +58,7 @@ const getFees = async (req, res) => {
     const fees = await feesModel.find({});
     res.json({ success: true, fees });
   } catch (error) {
-    console.log(error);
+    //console.log(error);
     res.json({ success: false, message: error.message });
   }
 };
@@ -69,8 +69,8 @@ const getFeesByClass = async (req, res) => {
     const { year } = req.params; // Extract class (year) name from URL
 
     const fees = await feesModel.findOne(); // Fetch the fees document
-    console.log("year", year);
-    console.log("Logging", fees);
+    //console.log("year", year);
+    //console.log("Logging", fees);
     if (!fees) {
       return res
         .status(404)
@@ -83,10 +83,10 @@ const getFeesByClass = async (req, res) => {
         .json({ success: false, message: "Invalid class name" });
     }
     const feeAmount = fees[year];
-    console.log(feeAmount);
+    //console.log(feeAmount);
     res.json({ success: true, fee: feeAmount });
   } catch (error) {
-    console.error("Error fetching fee:", error);
+    //console.error("Error fetching fee:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
