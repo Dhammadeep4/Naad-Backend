@@ -7,6 +7,7 @@ import {
   getAllHistory,
   getHistoryByStudentId,
   getReceipt,
+  paymentRequest,
 } from "../controllers/paymentController.js";
 const paymentRouter = express.Router();
 
@@ -21,4 +22,7 @@ paymentRouter.get("/getReceipt/:payment_id", getReceipt);
 paymentRouter.get("/getAllHistory", getAllHistory);
 //getting payment history for single student
 paymentRouter.get("/getStudentHistory/:student_id", getHistoryByStudentId);
+
+//creating a payment request
+paymentRouter.post("/paymentrequest", paymentRequest);
 export default paymentRouter;
