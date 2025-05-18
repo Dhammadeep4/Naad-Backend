@@ -7,8 +7,10 @@ const updateFees = async (req, res) => {
       prarambhik,
       praveshika_pratham,
       praveshika_purna,
+      praveshika_purna_batch1,
       madhyama_pratham,
       madhyama_purna,
+      madhyama_purna_batch1,
       visharad_pratham,
       visharad_purna,
       chote_nartak,
@@ -19,22 +21,24 @@ const updateFees = async (req, res) => {
       prarambhik: Number(prarambhik),
       praveshika_pratham: Number(praveshika_pratham),
       praveshika_purna: Number(praveshika_purna),
+      praveshika_purna_batch1: Number(praveshika_purna_batch1),
       madhyama_pratham: Number(madhyama_pratham),
       madhyama_purna: Number(madhyama_purna),
+      madhyama_purna_batch1: Number(madhyama_purna_batch1),
       visharad_pratham: Number(visharad_pratham),
       visharad_purna: Number(visharad_purna),
       chote_nartak: Number(chote_nartak),
       registration: Number(registration),
     };
 
-    //console.log(req.body);
+    console.log(req.body);
     // Creating a new fee document
     const updatedFee = await feesModel.findOneAndReplace({}, feeData, {
       upsert: true,
       new: true,
     });
 
-    //console.log("Fee Added");
+    console.log("Fee Added");
 
     // Responding with a success message
     res.json({

@@ -7,6 +7,8 @@ const paymentSchema = new mongoose.Schema(
     mode: { type: String, required: true },
     amount: { type: String },
     receipt: { type: String },
+    request: { type: String },
+    remark: { type: String },
   },
   { timestamps: true }
 );
