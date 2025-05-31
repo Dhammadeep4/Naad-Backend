@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
 const studentSchema = new mongoose.Schema(
   {
@@ -6,13 +6,22 @@ const studentSchema = new mongoose.Schema(
     middlename: { type: String, required: true },
     lastname: { type: String, required: true },
     address: { type: String, required: true },
-    contact: { type: Number, required: true },
+    contact: { type: String, required: true }, // Changed from Number to String
     dob: { type: String, required: true },
     doj: { type: String, required: true },
     year: { type: String, required: true },
     image: { type: String },
-    status: { type: String },
+    role: { type: String, enum: ["admin", "student"], default: "student" },
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
+    isDelete: { type: String, required: true },
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    lastPayment: {
+      type: Schema.Types.ObjectId,
+      ref: "Payment",
+    },
   },
+
   { timestamps: true }
 );
 

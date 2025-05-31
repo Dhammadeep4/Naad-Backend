@@ -4,12 +4,13 @@ import {
   getFeesByClass,
   updateFees,
 } from "../controllers/feesController.js";
+import verifyRole from "../middlewares/auth.js";
 
 //initialize the router
 const feeRouter = express.Router();
 
-feeRouter.post("/update", updateFees);
-feeRouter.get("/getFee", getFees);
+feeRouter.post("/update", verifyRole(["admin"]), updateFees);
+feeRouter.get("/getFee", verifyRole(["admin"]), getFees);
 feeRouter.get("/amount/:year", getFeesByClass);
 
 export default feeRouter;

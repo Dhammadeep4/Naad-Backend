@@ -6,23 +6,54 @@ import {
   updateDB,
   getAllHistory,
   getHistoryByStudentId,
-  getReceipt,
   paymentRequest,
+  getPending,
+  getMonthHistory,
+  getMonthlyPaymentStats,
+  getPendingHistoryByStudentId,
+  getCompletedHistoryByStudentId,
 } from "../controllers/paymentController.js";
+
+import verifyRole from "../middlewares/auth.js";
 const paymentRouter = express.Router();
 
 paymentRouter.post("/payment/process", processPayment);
 paymentRouter.get("/getKey", getKey);
 paymentRouter.post("/paymentVerification", paymentVerfication);
 //adding payment in db
-paymentRouter.post("/updateDB", updateDB);
-//getting receipt
-paymentRouter.get("/getReceipt/:payment_id", getReceipt);
+paymentRouter.post("/updateDB", verifyRole(["admin", "student"]), updateDB);
+
 //getting all payments made
 paymentRouter.get("/getAllHistory", getAllHistory);
+//getting month history
+paymentRouter.get(
+  "/getMonthHistory/:month/:year",
+  verifyRole(["admin"]),
+  getMonthHistory
+);
+//get pending history
+paymentRouter.get("/getPending", verifyRole(["admin"]), getPending);
 //getting payment history for single student
 paymentRouter.get("/getStudentHistory/:student_id", getHistoryByStudentId);
+//getting pending history for single student
+paymentRouter.get(
+  "/getPendingStudentHistory/:id",
+  verifyRole(["student"]),
+  getPendingHistoryByStudentId
+);
+//getting completed history for single student
+paymentRouter.get(
+  "/getCompletedStudentHistory/:id",
+  verifyRole(["admin", "student"]),
+  getCompletedHistoryByStudentId
+);
+//controller to get monthly stats
+paymentRouter.get(
+  "/getAnalytics",
+  verifyRole(["admin"]),
+  getMonthlyPaymentStats
+);
 
 //creating a payment request
-paymentRouter.post("/paymentrequest", paymentRequest);
+paymentRouter.post("/paymentrequest", verifyRole(["admin"]), paymentRequest);
 export default paymentRouter;
