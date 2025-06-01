@@ -268,7 +268,7 @@ export const paymentVerfication = async (req, res) => {
     // await paymentModel.create({ ... });
     // `https://naad.netlify.app/paymentSuccess?reference=${razorpay_payment_id}`
     return res.redirect(
-      `http://localhost:5174/paymentSuccess?reference=${razorpay_payment_id}&amount=${notes.amount}&remarks=${notes.remark}`
+      `http://localhost:5174/paymentSuccess?reference=${razorpay_payment_id}&amount=${notes.amount}&remarks=${notes.remark}&uid=${notes.uid}`
     );
   } catch (error) {
     console.error("Error fetching payment from Razorpay:", error);
@@ -300,7 +300,7 @@ export const getMonthHistory = async (req, res) => {
     // Fetch payments for the month and populate student info
     const payments = await paymentModel
       .find({
-        createdAt: { $gte: startDate, $lt: endDate },
+        updatedAt: { $gte: startDate, $lt: endDate },
       })
       .populate("student_id", "firstname lastname year"); // only populate needed fields
     console.log(payments[0].student_id);
@@ -364,8 +364,8 @@ export const getMonthlyPaymentStats = async (req, res) => {
       {
         $group: {
           _id: {
-            year: { $year: "$createdAt" },
-            month: { $month: "$createdAt" },
+            year: { $year: "$updatedAt" },
+            month: { $month: "$updatedAt" },
           },
           totalAmount: {
             $sum: { $toDouble: "$amount" },
