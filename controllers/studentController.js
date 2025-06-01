@@ -30,9 +30,32 @@ const addStudent = async (req, res) => {
     //checks if the image file is present and then stores it in the variable
     const image = req.file.path;
 
-    const result = await cloudinary.uploader.upload(image, {
+    //compressing image while uploading to cloudinary
+    // Reject file over 500KB
+    if (req.file.size > 500 * 1024) {
+      return res.json({
+        success: false,
+        message: "Image must be smaller than 500KB.",
+      });
+    }
+    if (contact.length > 10 || contact.length < 10) {
+      return res.json({
+        success: false,
+        message: "Enter valid contact number",
+      });
+    }
+
+    // Upload with compression
+    const result = await cloudinary.uploader.upload(req.file.path, {
       resource_type: "image",
+      folder: "students",
+      transformation: [
+        { width: 300, height: 300, crop: "limit" },
+        { quality: "auto:low" },
+        { fetch_format: "auto" },
+      ],
     });
+
     //console.log("Upload Success:", result);
 
     // Validate if required fields are provided
@@ -65,6 +88,8 @@ const addStudent = async (req, res) => {
     //   result.url
     // );
 
+    const username = `${contact}@${firstname}`;
+    const password = `${firstname}@${lastname}`;
     const studentData = {
       firstname,
       middlename, // This is optional, so you can pass it directly
@@ -75,18 +100,26 @@ const addStudent = async (req, res) => {
       doj,
       year,
       image: result.secure_url,
+      role: "student",
       status: "active",
+      isDelete: "false",
+      username: username,
+      password: password,
     };
-
+    console.log("studentData:", studentData);
     // Creating a new student document
     const newStudent = new studentModel(studentData);
     // Saving the student data to MongoDB
     await newStudent.save();
 
-    //console.log("Student Added");
+    console.log("Student Added");
 
     // Responding with a success message
-    res.json({ success: true, message: "Student added successfully" });
+    res.json({
+      success: true,
+      message: "Student added successfully",
+      studentData,
+    });
   } catch (error) {
     // Log error message for debugging purposes
     //console.log("Error while adding student: ", error.message);
@@ -109,10 +142,26 @@ const addStudent = async (req, res) => {
   }
 };
 
-//function to get all students
+//function to get all students without paymentHistory
 const getStudents = async (req, res) => {
   try {
-    const students = await studentModel.find({});
+    // Find students where role is NOT "admin", sorted by newest first
+    const students = await studentModel
+      .find(
+        { role: "student", isDelete: "false" },
+        {
+          isDelete: 0,
+          username: 0,
+          password: 0,
+          createdAt: 0,
+          updatedAt: 0,
+          lastPayment: 0,
+          paymentHistory: 0,
+        }
+      )
+      .sort({ _id: -1 });
+
+    console.log("Sorted student:" + students);
     res.json({ success: true, students });
   } catch (error) {
     //console.log(error);
@@ -120,10 +169,118 @@ const getStudents = async (req, res) => {
   }
 };
 
+const getStudentswithLastHistory = async (req, res) => {
+  try {
+    // Find students where middlename is NOT "admin", sorted by newest first
+    const students = await studentModel
+      .find(
+        { middlename: { $ne: "admin" }, isDelete: false, status: "active" },
+        {
+          isDelete: 0,
+          username: 0,
+          password: 0,
+          status: 0,
+          address: 0,
+          contact: 0,
+          role: 0,
+          dob: 0,
+          doj: 0,
+          createdAt: 0,
+          updatedAt: 0,
+          paymentHistory: 0,
+        }
+      )
+      .populate("lastPayment", "mode createdAt")
+      .sort({ _id: -1 });
+
+    console.log("Sorted student:" + students);
+    res.json({ success: true, students });
+  } catch (error) {
+    //console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+//get student's last paymetn
+
+const lastPayment = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    let data = await studentModel
+      .findById(id)
+      .select("lastPayment")
+      .populate("lastPayment", "createdAt");
+
+    console.log("sending response:" + data);
+    res.json({
+      success: true,
+      data,
+    });
+    // else {
+    //   data = { lastPayment: { createdAt: 0 } };
+    //   res.json({
+    //     success: true,
+    //     data,
+    //   });
+    // }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error retrieving student",
+      error: error.message,
+    });
+  }
+};
+
+const viewStudentwithHistory = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const data = await studentModel
+      .findById(id)
+      .select("paymentHistory pending lastPayment")
+      .lean(); // use .lean() to get a plain JS object for easier manipulation
+
+    if (data?.paymentHistory) {
+      data.paymentHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+    if (!data) {
+      console.log("enter if");
+      return res.status(401).json({
+        success: false,
+        message: "Something went wrong, Kindly Login again",
+      });
+    }
+
+    console.log("sending response:" + data);
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error retrieving student",
+      error: error.message,
+    });
+  }
+};
 const viewStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const profile = await studentModel.findById(id);
+    const profile = await studentModel.findById(
+      { _id: id },
+      {
+        isDelete: 0,
+        username: 0,
+        password: 0,
+        createdAt: 0,
+        updatedAt: 0,
+        paymentHistory: 0,
+        lastPayment: 0,
+        pending: 0,
+      }
+    );
     res.json({ success: true, profile });
   } catch (error) {
     //console.log(error);
@@ -244,7 +401,11 @@ const setStatus = async (req, res) => {
 const deleteStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const student = await studentModel.findByIdAndDelete(id);
+    let updatedData = { isDelete: true };
+    const student = await studentModel.findByIdAndUpdate(id, updatedData, {
+      new: true,
+      runValidators: true,
+    });
     if (!student) {
       return res.json({ success: false, message: "Student not found" });
     }
@@ -260,6 +421,9 @@ export {
   getStudents,
   viewStudent,
   editStudent,
+  getStudentswithLastHistory,
+  lastPayment,
+  viewStudentwithHistory,
   setStatus,
   deleteStudent,
   check,

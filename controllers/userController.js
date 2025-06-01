@@ -1,5 +1,6 @@
 import userModel from "../models/userModel.js";
-
+import studentModel from "../models/studentModel.js";
+import jwt from "jsonwebtoken";
 const createUser = async (req, res) => {
   //console.log("Logging request body", req.body);
   const { username, password, student_id } = req.body;
@@ -34,28 +35,71 @@ const login = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    //fetching user creds
-    const user = await userModel.findOne({ username });
+    console.log("Finding studetnt");
+    // Find the student with matching username and password
+    const user = await studentModel.findOne({ username });
     if (!user) {
-      return res.json({ success: false, message: "User does not exist" });
-    }
-
-    //comparing password
-    if (password != user.password) {
-      res.json({ success: false, message: "Invalid credentials" });
-    } else {
-      res.json({
-        success: true,
-        message: "Logged In Successfully",
-        user: {
-          username: user.username,
-          student_id: user.student_id, // Include student_id in response
-        },
+      console.log("enter if");
+      return res.status(401).json({
+        success: false,
+        message: "User Does Not Exist",
       });
     }
+    if (user.password != password) {
+      return res.status(401).json({
+        success: false,
+        message: "Incorrect credentials",
+      });
+    }
+    console.log("Found user:", user.role);
+    console.log("secret", process.env.JWT_SECRET);
+
+    const token = jwt.sign(
+      { id: user._id, role: user.role }, // You can include more info if needed
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+    console.log("token generated:", token);
+    const {
+      firstname,
+      middlename,
+      lastname,
+      address,
+      image,
+      contact,
+      dob,
+      doj,
+      year,
+      status,
+      role,
+      _id,
+    } = user;
+
+    console.log("sending response:" + user);
+    res.json({
+      success: true,
+      token,
+      user: {
+        firstname,
+        middlename,
+        lastname,
+        address,
+        image,
+        contact,
+        dob,
+        doj,
+        year,
+        status,
+        role,
+        _id,
+      },
+    });
   } catch (error) {
-    //console.log(error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error retrieving student",
+      error: error.message,
+    });
   }
 };
 

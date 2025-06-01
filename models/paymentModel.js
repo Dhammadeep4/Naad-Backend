@@ -3,7 +3,7 @@ import mongoose, { Schema } from "mongoose";
 const paymentSchema = new mongoose.Schema(
   {
     payment_id: { type: String, required: true },
-    student_id: { type: Schema.Types.ObjectId, required: true },
+    student_id: { type: Schema.Types.ObjectId, ref: "Student", required: true },
     mode: { type: String, required: true },
     amount: { type: String },
     receipt: { type: String },

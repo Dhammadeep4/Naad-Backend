@@ -1,7 +1,10 @@
 import paymentModel from "../models/paymentModel.js";
+import studentModel from "../models/studentModel.js";
+import ExcelJS from "exceljs";
 import { instance } from "../server.js"; //in this we have passed instance of razorpay created in server.js
 import crypto from "crypto";
 import Razorpay from "razorpay";
+//import { ObjectId } from "mongodb";
 
 export const processPayment = async (req, res) => {
   //this controller accepts payment amount in request body
@@ -27,14 +30,13 @@ export const getKey = async (req, res) => {
 //below controller is to update payment in db
 export const updateDB = async (req, res) => {
   const { payment_id, student_id, mode, receipt, remark, amount } = req.body;
-
+  console.log("Body", req.body);
   const paymentData = {
     payment_id,
     student_id,
     mode,
     amount,
     remark,
-    receipt,
     request: "completed", // Optionally update the request status
   };
 
@@ -52,13 +54,16 @@ export const updateDB = async (req, res) => {
     }
 
     // Step 2: Check if a pending payment exists for the same student and amount
+
     const pendingRecord = await paymentModel.findOne({
       student_id,
       request: "pending",
       amount,
+      remark,
     });
 
     if (pendingRecord) {
+      console.log("Entering pending");
       // Step 3: Update the existing pending record
       pendingRecord.payment_id = payment_id;
       pendingRecord.mode = mode;
@@ -66,7 +71,44 @@ export const updateDB = async (req, res) => {
       pendingRecord.request = "completed"; // You can choose to mark it as completed
 
       await pendingRecord.save();
+      //remove pending request from aray in student collection
 
+      //const pendingId = new ObjectId(pendingRecord._id);
+      //console.log("ObjectId:", pendingId);
+      // const data = {
+      //   $push: {
+      //     paymentHistory: {
+      //       $each: [
+      //         {
+      //           mode,
+      //           payment_id,
+      //           remark,
+      //           amount,
+      //           date: pendingRecord.updatedAt,
+      //         },
+      //       ],
+      //       $slice: -10, // Keep only the latest 10 entries
+      //     },
+      //   },
+      //   $pull: {
+      //     pending: {
+      //       amount: amount,
+      //       remark: pendingRecord.remark,
+      //     },
+      //   },
+      // };
+      // try {
+      //   const student = await studentModel.findByIdAndUpdate(student_id, data, {
+      //     new: true,
+      //     runValidators: true,
+      //   });
+      //   if (!student) {
+      //     return res.json({ success: false, message: "Student not found" });
+      //   }
+      // } catch (error) {
+      //   console.log("Error::" + error);
+      //   res.json({ success: false, message: "Error updating payment" });
+      // }
       return res.json({
         success: true,
         message: "Pending payment updated successfully",
@@ -77,6 +119,7 @@ export const updateDB = async (req, res) => {
     // Step 4: If no pending record, add a new one
     const newPayment = new paymentModel(paymentData);
     await newPayment.save();
+    await lastPayment(newPayment);
 
     return res.json({
       success: true,
@@ -86,6 +129,35 @@ export const updateDB = async (req, res) => {
   } catch (error) {
     console.error("Error in updateDB:", error);
     res.status(500).json({ success: false, message: "Server error", error });
+  }
+};
+
+//function to update last payment in student collection
+const lastPayment = async (paymentData) => {
+  const { student_id, mode, payment_id, amount, remark, createdAt } =
+    paymentData;
+  console.log(paymentData);
+  const updatedData = {
+    $set: {
+      lastPayment: paymentData._id,
+    },
+  };
+
+  try {
+    const student = await studentModel.findByIdAndUpdate(
+      student_id,
+      updatedData,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+    if (!student) {
+      return res.json({ success: false, message: "Student not found" });
+    }
+  } catch (error) {
+    console.log("Error::" + error);
+    res.json({ success: false, message: "Error updating payment" });
   }
 };
 
@@ -114,9 +186,46 @@ export const paymentRequest = async (req, res) => {
       message: "Already same remark present in DB add a new remark",
     });
   }
+
+  const existing = await paymentModel.findOne({ payment_id, amount });
+  if (existing) {
+    console.log("Same ID");
+    return res.json({
+      success: false,
+      message:
+        "Clear previous request with same amount and then add new request with same amount",
+    });
+  }
   const newPayment = new paymentModel(paymentRequestData);
   // Saving the student data to MongoDB
   await newPayment.save();
+
+  console.log("Logging new payment", newPayment);
+  const date = newPayment.createdAt;
+  const pendingData = {
+    $push: {
+      pending: {
+        $each: [{ date, payment_id, remark, amount }], // Keep only the latest 10 entries
+      },
+    },
+  };
+  try {
+    const student = await studentModel.findByIdAndUpdate(
+      student_id,
+      pendingData,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+    if (!student) {
+      return res.json({ success: false, message: "Student not found" });
+    }
+  } catch (error) {
+    console.log("Error::" + error);
+    res.json({ success: false, message: "Error updating payment request" });
+  }
+
   res.json({
     success: true,
     message: "Payment Request has been created",
@@ -138,8 +247,11 @@ export const paymentVerfication = async (req, res) => {
 
   if (!isAuthentic) {
     return res.redirect(
+
+
       // `http://localhost:5173/paymentFailure?reference=${razorpay_payment_id}`
       `https://naad.netlify.app/paymentFailure?reference=${razorpay_payment_id}`
+
     );
   }
 
@@ -159,12 +271,18 @@ export const paymentVerfication = async (req, res) => {
     // await paymentModel.create({ ... });
     // `https://naad.netlify.app/paymentSuccess?reference=${razorpay_payment_id}`
     return res.redirect(
+
+
       `https://naad.netlify.app/paymentSuccess?reference=${razorpay_payment_id}&amount=${notes.amount}&remarks=${notes.remark}`
+
     );
   } catch (error) {
     console.error("Error fetching payment from Razorpay:", error);
     return res.redirect(
+
+
       `https://naad.netlify.app/paymentFailure?reference=${razorpay_payment_id}`
+
     );
   }
 };
@@ -177,6 +295,161 @@ export const getAllHistory = async (req, res) => {
     res.json({ success: true, history });
   } catch (error) {
     //console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+export const getMonthHistory = async (req, res) => {
+  try {
+    const year = parseInt(req.params.year);
+    const month = parseInt(req.params.month) - 1;
+
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 1);
+
+    // Fetch payments for the month and populate student info
+    const payments = await paymentModel
+      .find({
+        createdAt: { $gte: startDate, $lt: endDate },
+      })
+      .populate("student_id", "firstname lastname year"); // only populate needed fields
+    console.log(payments[0].student_id);
+    // Create Excel workbook and worksheet
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Payments");
+
+    // Define headers
+    worksheet.columns = [
+      { header: "First Name", key: "firstName", width: 20 },
+      { header: "Last Name", key: "lastName", width: 20 },
+      { header: "Year", key: "year", width: 10 },
+      { header: "Amount", key: "amount", width: 10 },
+      { header: "Payment_id", key: "payment_id", width: 10 },
+      { header: "Remark", key: "remark", width: 20 },
+      { header: "Request", key: "request", width: 15 },
+      { header: "Updated At", key: "updatedAt", width: 25 },
+    ];
+
+    // Add data rows
+    payments.forEach((payment) => {
+      const student = payment.student_id || {};
+      worksheet.addRow({
+        firstName: student.firstname || "",
+        lastName: student.lastname || "",
+        year: student.year || "",
+        remark: payment.remark,
+        amount: payment.amount,
+        payment_id: payment.payment_id,
+        request: payment.request,
+        updatedAt: payment.updatedAt.toLocaleDateString(),
+      });
+    });
+
+    // Set headers and send Excel file
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=payments_${year}_${month + 1}.xlsx`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Error generating Excel:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+//controller to get monthly stats
+
+export const getMonthlyPaymentStats = async (req, res) => {
+  try {
+    const payments = await paymentModel.aggregate([
+      {
+        $match: { request: "completed" },
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+          },
+          totalAmount: {
+            $sum: { $toDouble: "$amount" },
+          },
+          students: { $addToSet: "$student_id" },
+        },
+      },
+      {
+        $sort: {
+          "_id.year": -1,
+          "_id.month": -1,
+        },
+      },
+      {
+        $limit: 6,
+      },
+      {
+        $project: {
+          _id: 0,
+          month: {
+            $concat: [
+              { $toString: "$_id.year" },
+              "-",
+              {
+                $cond: [
+                  { $lt: ["$_id.month", 10] },
+                  { $concat: ["0", { $toString: "$_id.month" }] },
+                  { $toString: "$_id.month" },
+                ],
+              },
+            ],
+          },
+          totalAmount: 1,
+          uniqueStudents: { $size: "$students" },
+        },
+      },
+      {
+        $sort: { month: 1 }, // optional: sort months in ascending order for chart
+      },
+    ]);
+
+    const result = {};
+    payments.forEach((entry) => {
+      result[entry.month] = {
+        amount: entry.totalAmount,
+        uniqueStudents: entry.uniqueStudents,
+      };
+    });
+
+    // const dummy = {
+    //   "2025-01": { amount: 25000, uniqueStudents: 26 },
+    //   "2025-02": { amount: 27000, uniqueStudents: 28 },
+    //   "2025-03": { amount: 45000, uniqueStudents: 32 },
+    //   "2025-04": { amount: 35000, uniqueStudents: 30 },
+    //   "2025-05": { amount: 32000, uniqueStudents: 34 },
+    //   "2025-06": { amount: 30000, uniqueStudents: 34 },
+    // };
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error fetching monthly stats:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+//controller to fetch all pending history
+export const getPending = async (req, res) => {
+  try {
+    const history = await paymentModel
+      .find({ request: "pending" })
+      .select("student_id amount remark createdAt")
+      .populate("student_id", "firstname lastname year");
+    console.log("populate", history);
+
+    res.json({ success: true, history });
+  } catch (error) {
     res.json({ success: false, message: error.message });
   }
 };
@@ -206,46 +479,64 @@ export const getHistoryByStudentId = async (req, res) => {
     });
   }
 };
-export const getReceipt = async (req, res) => {
-  const { payment_id } = req.params;
-  console.log(payment_id);
-  if (payment_id === "N/A") {
-    try {
-      const data = await paymentModel.find({ payment_id });
-      console.log(data);
-      if (!data || data.length == 0) {
-        console.log("here");
-        return res.status(404).json({
-          success: false,
-          message: "No history found for this student ID",
-        });
-      }
 
-      res.status(200).json({
-        success: true,
-        receipt: data[0].receipt,
+export const getPendingHistoryByStudentId = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const history = await paymentModel
+      .find({ student_id: id, request: "pending" })
+      .select("amount remark");
+
+    if (!history || history.length == 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No history found for this student ID",
       });
-    } catch (error) {
-      console.log(error.message);
     }
-  } else {
-    try {
-      const data = await paymentModel.find({ payment_id });
 
-      if (!data || data.length == 0) {
-        console.log("here");
-        return res.status(404).json({
-          success: false,
-          message: "No history found for this student ID",
-        });
-      }
+    res.status(200).json({
+      success: true,
+      history,
+    });
+  } catch (error) {
+    //console.error("Error fetching history:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
 
-      res.status(200).json({
-        success: true,
-        receipt: data[0].receipt,
+export const getCompletedHistoryByStudentId = async (req, res) => {
+  const { id } = req.params;
+  console.log("Id", id);
+
+  try {
+    const history = await paymentModel
+      .find({
+        student_id: id,
+        request: "completed",
+      })
+      .select("payment_id mode amount remark updatedAt")
+      .sort({ _id: -1 });
+
+    if (!history || history.length == 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No history found for this student ID",
       });
-    } catch (error) {
-      console.log(error.message);
     }
+
+    res.status(200).json({
+      success: true,
+      history,
+    });
+  } catch (error) {
+    console.error("Error fetching history:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
