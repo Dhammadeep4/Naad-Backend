@@ -247,11 +247,8 @@ export const paymentVerfication = async (req, res) => {
 
   if (!isAuthentic) {
     return res.redirect(
-
-
       // `http://localhost:5173/paymentFailure?reference=${razorpay_payment_id}`
       `https://naad.netlify.app/paymentFailure?reference=${razorpay_payment_id}`
-
     );
   }
 
@@ -271,18 +268,12 @@ export const paymentVerfication = async (req, res) => {
     // await paymentModel.create({ ... });
     // `https://naad.netlify.app/paymentSuccess?reference=${razorpay_payment_id}`
     return res.redirect(
-
-
-      `https://naad.netlify.app/paymentSuccess?reference=${razorpay_payment_id}&amount=${notes.amount}&remarks=${notes.remark}&uid=${notes.uid}`
-
+      `http://localhost:5174/paymentSuccess?reference=${razorpay_payment_id}&amount=${notes.amount}&remarks=${notes.remark}`
     );
   } catch (error) {
     console.error("Error fetching payment from Razorpay:", error);
     return res.redirect(
-
-
       `https://naad.netlify.app/paymentFailure?reference=${razorpay_payment_id}`
-
     );
   }
 };

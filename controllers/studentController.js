@@ -31,11 +31,11 @@ const addStudent = async (req, res) => {
     const image = req.file.path;
 
     //compressing image while uploading to cloudinary
-    // Reject file over 500KB
-    if (req.file.size > 500 * 1024) {
+    // Reject file over 750KB
+    if (req.file.size > 750 * 1024) {
       return res.json({
         success: false,
-        message: "Image must be smaller than 500KB.",
+        message: "Image must be smaller than 750KB.",
       });
     }
     if (contact.length > 10 || contact.length < 10) {
@@ -306,12 +306,32 @@ const editStudent = async (req, res) => {
 
     let updatedData = {};
     if (req.file) {
-      // handle file
-      const image = req.file.path;
+      //compressing image while uploading to cloudinary
+      // Reject file over 1000KB
+      if (req.file.size > 750 * 1024) {
+        return res.json({
+          success: false,
+          message: "Image must be smaller than 750KB.",
+        });
+      }
+      if (contact.length > 10 || contact.length < 10) {
+        return res.json({
+          success: false,
+          message: "Enter valid contact number",
+        });
+      }
 
-      const result = await cloudinary.uploader.upload(image, {
+      // Upload with compression
+      const result = await cloudinary.uploader.upload(req.file.path, {
         resource_type: "image",
+        folder: "students",
+        transformation: [
+          { width: 300, height: 300, crop: "limit" },
+          { quality: "auto:low" },
+          { fetch_format: "auto" },
+        ],
       });
+
       updatedData = {
         firstname,
         middlename,
@@ -401,7 +421,7 @@ const setStatus = async (req, res) => {
 const deleteStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    let updatedData = { isDelete: true };
+    let updatedData = { isDelete: true, status: "inactive" };
     const student = await studentModel.findByIdAndUpdate(id, updatedData, {
       new: true,
       runValidators: true,
