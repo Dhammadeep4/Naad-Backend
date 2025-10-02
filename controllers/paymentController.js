@@ -1,5 +1,6 @@
 import paymentModel from "../models/paymentModel.js";
 import studentModel from "../models/studentModel.js";
+import feeModel from "../models/feesModel.js";
 import ExcelJS from "exceljs";
 import { instance } from "../server.js"; //in this we have passed instance of razorpay created in server.js
 import crypto from "crypto";
@@ -29,7 +30,15 @@ export const getKey = async (req, res) => {
 
 //below controller is to update payment in db
 export const updateDB = async (req, res) => {
-  const { payment_id, student_id, mode, receipt, remark, amount } = req.body;
+  const {
+    payment_id,
+    student_id,
+    mode,
+    receipt,
+    remark,
+    amount,
+    feePaidUntil,
+  } = req.body;
   console.log("Body", req.body);
   const paymentData = {
     payment_id,
@@ -119,7 +128,7 @@ export const updateDB = async (req, res) => {
     // Step 4: If no pending record, add a new one
     const newPayment = new paymentModel(paymentData);
     await newPayment.save();
-    await lastPayment(newPayment);
+    await lastPayment(newPayment, feePaidUntil);
 
     return res.json({
       success: true,
@@ -132,16 +141,21 @@ export const updateDB = async (req, res) => {
   }
 };
 
-//function to update last payment in student collection
-const lastPayment = async (paymentData) => {
+//function to update last payment and in student collection
+const lastPayment = async (paymentData, feePaidUntil) => {
   const { student_id, mode, payment_id, amount, remark, createdAt } =
     paymentData;
   console.log(paymentData);
+  console.log("FeePaidUntil:", feePaidUntil);
   const updatedData = {
     $set: {
       lastPayment: paymentData._id,
     },
   };
+
+  if (feePaidUntil) {
+    updatedData.$set.feePaidUntil = feePaidUntil;
+  }
 
   try {
     const student = await studentModel.findByIdAndUpdate(
@@ -303,7 +317,7 @@ export const getMonthHistory = async (req, res) => {
         updatedAt: { $gte: startDate, $lt: endDate },
       })
       .populate("student_id", "firstname lastname year"); // only populate needed fields
-    console.log(payments[0].student_id);
+    console.log("logging:", payments.student_id);
     // Create Excel workbook and worksheet
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Payments");
@@ -333,6 +347,9 @@ export const getMonthHistory = async (req, res) => {
         request: payment.request,
         updatedAt: payment.updatedAt.toLocaleDateString(),
       });
+      console.log(
+        `Payment Student: ${student.firstname} fees: ${payment.amount}`
+      );
     });
 
     // Set headers and send Excel file
@@ -430,6 +447,150 @@ export const getMonthlyPaymentStats = async (req, res) => {
   }
 };
 
+//revised logic for monthly stats
+export const getMonthlyPaymentStatsRevised = async (req, res) => {
+  try {
+    const now = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(now.getMonth() - 5); // include current + last 5 months
+
+    const result = await paymentModel.aggregate([
+      {
+        //include payment documents where updatedAt is between six months ago and now.
+        $match: {
+          updatedAt: { $gte: sixMonthsAgo, $lte: now },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$updatedAt" },
+            month: { $month: "$updatedAt" },
+          },
+          totalCollection: { $sum: { $toDouble: "$amount" } },
+          uniqueStudents: { $addToSet: "$student_id" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          year: "$_id.year",
+          month: "$_id.month",
+          totalCollection: 1,
+          studentCount: { $size: "$uniqueStudents" },
+        },
+      },
+      { $sort: { year: 1, month: 1 } }, // chronological order
+    ]);
+    console.log("resultJson:", result);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server Error" });
+  }
+};
+
+//controller to get predicted collection for next month
+export const getPredictedCollection = async (req, res) => {
+  try {
+    // 1. Count active students by year
+    const activeStudents = await studentModel.aggregate([
+      { $match: { status: "active", isDelete: "false" } },
+      {
+        $group: {
+          _id: "$year",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // 2. Get fee structure (assuming only one fees document exists)
+    const fees = await feeModel.findOne({});
+    if (!fees) {
+      return res.status(404).json({ error: "Fees structure not found" });
+    }
+    // console.log("Fees:", fees);
+
+    // 3. Calculate predicted collection
+    let predictedCollection = 0;
+    let breakdown = [];
+
+    activeStudents.forEach((item) => {
+      let year = item._id;
+      const count = item.count;
+      console.log("Year:", year);
+      year = year.toLowerCase();
+      let y = year.replace(/ /g, "_");
+      // console.log("Modified Year:", y);
+      const feeAmount = fees[y] || 0; // match field in feesSchema
+      let total = count * feeAmount;
+      console.log(`Total for${y} : ${total}`);
+      predictedCollection += total;
+      breakdown.push({
+        year,
+        count,
+        feeAmount,
+        total,
+      });
+    });
+
+    //4. Calculate this month's collection
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    //gives you the last possible moment of the current month.
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+
+    const monthCollection = await paymentModel.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: { $toDouble: "$amount" } },
+          uniqueStudents: { $addToSet: "$student_id" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          totalAmount: 1,
+          studentCount: { $size: "$uniqueStudents" },
+        },
+      },
+    ]);
+    const stats =
+      monthCollection.length > 0
+        ? monthCollection[0]
+        : { totalAmount: 0, studentCount: 0 };
+    console.log("This Month Stats:", stats);
+
+    console.log("Predicted Collection:", predictedCollection);
+    console.log("Breakdown:", breakdown);
+    console.log("Active Students:", activeStudents);
+    res.json({
+      success: true,
+      totalActiveStudents: activeStudents.reduce((sum, s) => sum + s.count, 0),
+      predictedCollection,
+      breakdown,
+      stats, // detailed info
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
 //controller to fetch all pending history
 export const getPending = async (req, res) => {
   try {

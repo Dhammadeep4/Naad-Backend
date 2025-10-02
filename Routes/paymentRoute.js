@@ -12,6 +12,8 @@ import {
   getMonthlyPaymentStats,
   getPendingHistoryByStudentId,
   getCompletedHistoryByStudentId,
+  getMonthlyPaymentStatsRevised,
+  getPredictedCollection,
 } from "../controllers/paymentController.js";
 
 import verifyRole from "../middlewares/auth.js";
@@ -31,6 +33,7 @@ paymentRouter.get(
   verifyRole(["admin"]),
   getMonthHistory
 );
+
 //get pending history
 paymentRouter.get("/getPending", verifyRole(["admin"]), getPending);
 //getting payment history for single student
@@ -53,6 +56,16 @@ paymentRouter.get(
   verifyRole(["admin"]),
   getMonthlyPaymentStats
 );
+
+//get monthly stats revised logic
+paymentRouter.get(
+  "/getAnalyticsRevised",
+  verifyRole(["admin"]),
+  getMonthlyPaymentStatsRevised
+);
+
+//get predicted collection
+paymentRouter.get("/getPredictedCollection", getPredictedCollection);
 
 //creating a payment request
 paymentRouter.post("/paymentrequest", verifyRole(["admin"]), paymentRequest);
