@@ -20,6 +20,7 @@ const studentSchema = new mongoose.Schema(
       type: Schema.Types.ObjectId,
       ref: "Payment",
     },
+    feePaidUntil: { type: Date, default: null }, // 👈 track fee coverage
   },
 
   { timestamps: true }
