@@ -174,7 +174,119 @@ const lastPayment = async (paymentData, feePaidUntil) => {
     res.json({ success: false, message: "Error updating payment" });
   }
 };
+//controller to add multiple payment request in db
+export const multiplePaymentRequests = async (req, res) => {
+  // The request body should contain an array of requests
+  const { requests } = req.body;
 
+  console.log("Requests Data:", requests);
+  if (!requests || !Array.isArray(requests) || requests.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Request body must contain a non-empty array of 'requests'.",
+    });
+  }
+
+  const results = [];
+
+  for (const requestData of requests) {
+    const { student_id, remark, amount } = requestData;
+    const requestStatus = "pending";
+    const mode = "pending";
+    const payment_id = remark + " req_(" + student_id + ")";
+
+    // Object for the payment model
+    const paymentRequestData = {
+      student_id,
+      remark,
+      payment_id,
+      mode,
+      amount,
+      request: requestStatus,
+    };
+
+    let success = false;
+    let message = "";
+
+    // --- Validation and Duplication Checks ---
+
+    const existingID = await paymentModel.findOne({ payment_id });
+    if (existingID) {
+      console.log(`Duplicate ID for student ${student_id}: ${payment_id}`);
+      message = "Already same remark present in DB.";
+      results.push({ student_id, success: false, message });
+      continue; // Move to the next request
+    }
+
+    const existing = await paymentModel.findOne({ payment_id, amount });
+    if (existing) {
+      console.log(
+        `Duplicate Request/Amount for student ${student_id}: ${payment_id}`
+      );
+      message =
+        "Clear previous request with same amount and then add new request with same amount.";
+      results.push({ student_id, success: false, message });
+      continue; // Move to the next request
+    }
+
+    // --- Create and Save Payment Request ---
+
+    console.log("paymentRequestData:", paymentRequestData);
+    try {
+      const newPayment = new paymentModel(paymentRequestData);
+      await newPayment.save();
+
+      // --- Update Student Pending Data ---
+
+      const date = newPayment.createdAt;
+      const pendingUpdate = {
+        $push: {
+          pending: {
+            $each: [{ date, payment_id, remark, amount }],
+          },
+        },
+      };
+
+      const student = await studentModel.findByIdAndUpdate(
+        student_id,
+        pendingUpdate,
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+
+      if (!student) {
+        // If student is not found, we should ideally delete the payment request we just saved.
+        // For simplicity here, we log and mark as failed.
+        await paymentModel.deleteOne({ _id: newPayment._id });
+        message = "Student not found. Payment request rolled back.";
+        results.push({ student_id, success: false, message });
+      } else {
+        success = true;
+        message = "Payment Request created successfully.";
+        results.push({ student_id, success: true, message, newPayment });
+      }
+    } catch (error) {
+      console.error(
+        `Error processing payment request for student ${student_id}:`,
+        error
+      );
+      message = "Error creating payment request or updating student data.";
+      results.push({ student_id, success: false, message });
+    }
+  }
+
+  // Final response with details of all requests
+  const totalSuccess = results.filter((r) => r.success).length;
+  const totalFailed = results.length - totalSuccess;
+
+  res.json({
+    success: totalSuccess > 0, // General success if at least one request succeeded
+    message: `${totalSuccess} request(s) succeeded, ${totalFailed} request(s) failed.`,
+    results,
+  });
+};
 //controller to add payment request in db
 export const paymentRequest = async (req, res) => {
   //getting student data from request body
@@ -213,7 +325,7 @@ export const paymentRequest = async (req, res) => {
   const newPayment = new paymentModel(paymentRequestData);
   // Saving the student data to MongoDB
   await newPayment.save();
-
+  console.log("**********************");
   console.log("Logging new payment", newPayment);
   const date = newPayment.createdAt;
   const pendingData = {
@@ -347,9 +459,7 @@ export const getMonthHistory = async (req, res) => {
         request: payment.request,
         updatedAt: payment.updatedAt.toLocaleDateString(),
       });
-      console.log(
-        `Payment Student: ${student.firstname} fees: ${payment.amount}`
-      );
+      //console.log(`Payment Student: ${student.firstname} fees: ${payment.amount}`);
     });
 
     // Set headers and send Excel file
@@ -459,6 +569,7 @@ export const getMonthlyPaymentStatsRevised = async (req, res) => {
         //include payment documents where updatedAt is between six months ago and now.
         $match: {
           updatedAt: { $gte: sixMonthsAgo, $lte: now },
+          request: "completed",
         },
       },
       {
@@ -490,55 +601,116 @@ export const getMonthlyPaymentStatsRevised = async (req, res) => {
   }
 };
 
-//controller to get predicted collection for next month
+//controller to get predicted collection for next month-old version
+// export const getPredictedCollection = async (req, res) => {
+//   try {
+//     // 1. Count active students by year
+//     const activeStudents = await studentModel.aggregate([
+//       { $match: { status: "active", isDelete: "false" } },
+//       {
+//         $group: {
+//           _id: "$year",
+//           count: { $sum: 1 },
+//         },
+//       },
+//     ]);
+
+//     // 2. Get fee structure (assuming only one fees document exists)
+//     const fees = await feeModel.findOne({});
+//     if (!fees) {
+//       return res.status(404).json({ error: "Fees structure not found" });
+//     }
+//     // console.log("Fees:", fees);
+
+//     // 3. Calculate predicted collection
+//     let predictedCollection = 0;
+//     let breakdown = [];
+
+//     activeStudents.forEach((item) => {
+//       let year = item._id;
+//       const count = item.count;
+//       console.log("Year:", year);
+//       year = year.toLowerCase();
+//       let y = year.replace(/ /g, "_");
+//       // console.log("Modified Year:", y);
+//       const feeAmount = fees[y] || 0; // match field in feesSchema
+//       let total = count * feeAmount;
+//       console.log(`Total for${y} : ${total}`);
+//       predictedCollection += total;
+//       breakdown.push({
+//         year,
+//         count,
+//         feeAmount,
+//         total,
+//       });
+//     });
+
+//     //4. Calculate this month's collection
+//     const now = new Date();
+//     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+//     //gives you the last possible moment of the current month.
+//     const endOfMonth = new Date(
+//       now.getFullYear(),
+//       now.getMonth() + 1,
+//       0,
+//       23,
+//       59,
+//       59,
+//       999
+//     );
+
+//     const monthCollection = await paymentModel.aggregate([
+//       {
+//         $match: {
+//           createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+//           remark: {
+//             $regex: /monthly\s*fee\s*collected/i,
+//           },
+//         },
+//       },
+//       {
+//         $group: {
+//           _id: null,
+//           totalAmount: { $sum: { $toDouble: "$amount" } },
+//           uniqueStudents: { $addToSet: "$student_id" },
+//         },
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           totalAmount: 1,
+//           studentCount: { $size: "$uniqueStudents" },
+//         },
+//       },
+//     ]);
+//     console.log("Month Collection:", monthCollection);
+//     const stats =
+//       monthCollection.length > 0
+//         ? monthCollection[0]
+//         : { totalAmount: 0, studentCount: 0 };
+//     console.log("This Month Stats:", stats);
+
+//     console.log("Predicted Collection:", predictedCollection);
+//     console.log("Breakdown:", breakdown);
+//     console.log("Active Students:", activeStudents);
+//     res.json({
+//       success: true,
+//       totalActiveStudents: activeStudents.reduce((sum, s) => sum + s.count, 0),
+//       predictedCollection,
+//       breakdown,
+//       stats, // detailed info
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// };
+//controller to get predicted collection for next month-refactored version
 export const getPredictedCollection = async (req, res) => {
   try {
-    // 1. Count active students by year
-    const activeStudents = await studentModel.aggregate([
-      { $match: { status: "active", isDelete: "false" } },
-      {
-        $group: {
-          _id: "$year",
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    // 2. Get fee structure (assuming only one fees document exists)
-    const fees = await feeModel.findOne({});
-    if (!fees) {
-      return res.status(404).json({ error: "Fees structure not found" });
-    }
-    // console.log("Fees:", fees);
-
-    // 3. Calculate predicted collection
-    let predictedCollection = 0;
-    let breakdown = [];
-
-    activeStudents.forEach((item) => {
-      let year = item._id;
-      const count = item.count;
-      console.log("Year:", year);
-      year = year.toLowerCase();
-      let y = year.replace(/ /g, "_");
-      // console.log("Modified Year:", y);
-      const feeAmount = fees[y] || 0; // match field in feesSchema
-      let total = count * feeAmount;
-      console.log(`Total for${y} : ${total}`);
-      predictedCollection += total;
-      breakdown.push({
-        year,
-        count,
-        feeAmount,
-        total,
-      });
-    });
-
-    //4. Calculate this month's collection
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    //gives you the last possible moment of the current month.
     const endOfMonth = new Date(
       now.getFullYear(),
       now.getMonth() + 1,
@@ -549,48 +721,99 @@ export const getPredictedCollection = async (req, res) => {
       999
     );
 
-    const monthCollection = await paymentModel.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+    // 🔥 Run DB calls in parallel
+    const [activeStudents, fees, monthCollection] = await Promise.all([
+      studentModel.aggregate([
+        { $match: { status: "active", isDelete: "false" } },
+        {
+          $group: {
+            _id: "$year",
+            count: { $sum: 1 },
+          },
         },
-      },
-      {
-        $group: {
-          _id: null,
-          totalAmount: { $sum: { $toDouble: "$amount" } },
-          uniqueStudents: { $addToSet: "$student_id" },
+      ]),
+
+      feeModel.findOne({}, { __v: 0 }),
+
+      paymentModel.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+            remark: { $regex: /monthly\s*fee\s*collected/i },
+          },
         },
-      },
-      {
-        $project: {
-          _id: 0,
-          totalAmount: 1,
-          studentCount: { $size: "$uniqueStudents" },
+        {
+          // 🔥 reduce document size before grouping
+          $project: {
+            amount: 1,
+            student_id: 1,
+          },
         },
-      },
+        {
+          $group: {
+            _id: null,
+            totalAmount: {
+              $sum: {
+                $cond: [
+                  { $isNumber: "$amount" },
+                  "$amount",
+                  { $toDouble: "$amount" },
+                ],
+              },
+            },
+            uniqueStudents: { $addToSet: "$student_id" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            totalAmount: 1,
+            studentCount: { $size: "$uniqueStudents" },
+          },
+        },
+      ]),
     ]);
+
+    if (!fees) {
+      return res.status(404).json({ error: "Fees structure not found" });
+    }
+
+    // 🔥 Predict collection (JS is fast here)
+    let predictedCollection = 0;
+    const breakdown = [];
+
+    for (const { _id, count } of activeStudents) {
+      const key = _id.toLowerCase().replace(/ /g, "_");
+      const feeAmount = fees[key] || 0;
+      const total = count * feeAmount;
+
+      predictedCollection += total;
+      breakdown.push({
+        year: _id,
+        count,
+        feeAmount,
+        total,
+      });
+    }
+
     const stats =
       monthCollection.length > 0
         ? monthCollection[0]
         : { totalAmount: 0, studentCount: 0 };
-    console.log("This Month Stats:", stats);
 
-    console.log("Predicted Collection:", predictedCollection);
-    console.log("Breakdown:", breakdown);
-    console.log("Active Students:", activeStudents);
     res.json({
       success: true,
-      totalActiveStudents: activeStudents.reduce((sum, s) => sum + s.count, 0),
+      totalActiveStudents: activeStudents.reduce((s, i) => s + i.count, 0),
       predictedCollection,
       breakdown,
-      stats, // detailed info
+      stats,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Predicted collection error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
+
 //controller to fetch all pending history
 export const getPending = async (req, res) => {
   try {

@@ -14,6 +14,7 @@ import {
   getCompletedHistoryByStudentId,
   getMonthlyPaymentStatsRevised,
   getPredictedCollection,
+  multiplePaymentRequests,
 } from "../controllers/paymentController.js";
 
 import verifyRole from "../middlewares/auth.js";
@@ -69,4 +70,11 @@ paymentRouter.get("/getPredictedCollection", getPredictedCollection);
 
 //creating a payment request
 paymentRouter.post("/paymentrequest", verifyRole(["admin"]), paymentRequest);
+//creating multiple payment requests
+paymentRouter.post(
+  "/multiplePaymentRequest",
+  verifyRole(["admin"]),
+  multiplePaymentRequests
+);
+
 export default paymentRouter;

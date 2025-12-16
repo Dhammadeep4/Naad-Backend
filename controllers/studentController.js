@@ -161,7 +161,7 @@ const getStudents = async (req, res) => {
       )
       .sort({ _id: -1 });
 
-    console.log("Sorted student:" + students);
+    // console.log("Sorted student:" + students);
     res.json({ success: true, students });
   } catch (error) {
     //console.log(error);
