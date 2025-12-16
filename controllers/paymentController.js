@@ -601,7 +601,7 @@ export const getMonthlyPaymentStatsRevised = async (req, res) => {
   }
 };
 
-//controller to get predicted collection for next month-old version
+//controller to get predicted collection for next month
 export const getPredictedCollection = async (req, res) => {
   try {
     // 1. Count active students by year
@@ -665,7 +665,8 @@ export const getPredictedCollection = async (req, res) => {
         $match: {
           createdAt: { $gte: startOfMonth, $lte: endOfMonth },
           remark: {
-            $regex: /monthly\s*fee\s*collected/i,
+            $regex: "Monthly Fee collected",
+            $options: "i",
           },
         },
       },
@@ -700,13 +701,14 @@ export const getPredictedCollection = async (req, res) => {
       predictedCollection,
       breakdown,
       stats, // detailed info
+      msg: "Predicted collection calculated successfully",
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 };
-
+//controller to fetch all pending history
 export const getPending = async (req, res) => {
   try {
     const history = await paymentModel
