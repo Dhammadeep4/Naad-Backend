@@ -602,115 +602,54 @@ export const getMonthlyPaymentStatsRevised = async (req, res) => {
 };
 
 //controller to get predicted collection for next month-old version
-// export const getPredictedCollection = async (req, res) => {
-//   try {
-//     // 1. Count active students by year
-//     const activeStudents = await studentModel.aggregate([
-//       { $match: { status: "active", isDelete: "false" } },
-//       {
-//         $group: {
-//           _id: "$year",
-//           count: { $sum: 1 },
-//         },
-//       },
-//     ]);
-
-//     // 2. Get fee structure (assuming only one fees document exists)
-//     const fees = await feeModel.findOne({});
-//     if (!fees) {
-//       return res.status(404).json({ error: "Fees structure not found" });
-//     }
-//     // console.log("Fees:", fees);
-
-//     // 3. Calculate predicted collection
-//     let predictedCollection = 0;
-//     let breakdown = [];
-
-//     activeStudents.forEach((item) => {
-//       let year = item._id;
-//       const count = item.count;
-//       console.log("Year:", year);
-//       year = year.toLowerCase();
-//       let y = year.replace(/ /g, "_");
-//       // console.log("Modified Year:", y);
-//       const feeAmount = fees[y] || 0; // match field in feesSchema
-//       let total = count * feeAmount;
-//       console.log(`Total for${y} : ${total}`);
-//       predictedCollection += total;
-//       breakdown.push({
-//         year,
-//         count,
-//         feeAmount,
-//         total,
-//       });
-//     });
-
-//     //4. Calculate this month's collection
-//     const now = new Date();
-//     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-//     //gives you the last possible moment of the current month.
-//     const endOfMonth = new Date(
-//       now.getFullYear(),
-//       now.getMonth() + 1,
-//       0,
-//       23,
-//       59,
-//       59,
-//       999
-//     );
-
-//     const monthCollection = await paymentModel.aggregate([
-//       {
-//         $match: {
-//           createdAt: { $gte: startOfMonth, $lte: endOfMonth },
-//           remark: {
-//             $regex: /monthly\s*fee\s*collected/i,
-//           },
-//         },
-//       },
-//       {
-//         $group: {
-//           _id: null,
-//           totalAmount: { $sum: { $toDouble: "$amount" } },
-//           uniqueStudents: { $addToSet: "$student_id" },
-//         },
-//       },
-//       {
-//         $project: {
-//           _id: 0,
-//           totalAmount: 1,
-//           studentCount: { $size: "$uniqueStudents" },
-//         },
-//       },
-//     ]);
-//     console.log("Month Collection:", monthCollection);
-//     const stats =
-//       monthCollection.length > 0
-//         ? monthCollection[0]
-//         : { totalAmount: 0, studentCount: 0 };
-//     console.log("This Month Stats:", stats);
-
-//     console.log("Predicted Collection:", predictedCollection);
-//     console.log("Breakdown:", breakdown);
-//     console.log("Active Students:", activeStudents);
-//     res.json({
-//       success: true,
-//       totalActiveStudents: activeStudents.reduce((sum, s) => sum + s.count, 0),
-//       predictedCollection,
-//       breakdown,
-//       stats, // detailed info
-//     });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ error: "Server error" });
-//   }
-// };
-//controller to get predicted collection for next month-refactored version
 export const getPredictedCollection = async (req, res) => {
   try {
+    // 1. Count active students by year
+    const activeStudents = await studentModel.aggregate([
+      { $match: { status: "active", isDelete: "false" } },
+      {
+        $group: {
+          _id: "$year",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // 2. Get fee structure (assuming only one fees document exists)
+    const fees = await feeModel.findOne({});
+    if (!fees) {
+      return res.status(404).json({ error: "Fees structure not found" });
+    }
+    // console.log("Fees:", fees);
+
+    // 3. Calculate predicted collection
+    let predictedCollection = 0;
+    let breakdown = [];
+
+    activeStudents.forEach((item) => {
+      let year = item._id;
+      const count = item.count;
+      console.log("Year:", year);
+      year = year.toLowerCase();
+      let y = year.replace(/ /g, "_");
+      // console.log("Modified Year:", y);
+      const feeAmount = fees[y] || 0; // match field in feesSchema
+      let total = count * feeAmount;
+      console.log(`Total for${y} : ${total}`);
+      predictedCollection += total;
+      breakdown.push({
+        year,
+        count,
+        feeAmount,
+        total,
+      });
+    });
+
+    //4. Calculate this month's collection
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    //gives you the last possible moment of the current month.
     const endOfMonth = new Date(
       now.getFullYear(),
       now.getMonth() + 1,
@@ -721,100 +660,53 @@ export const getPredictedCollection = async (req, res) => {
       999
     );
 
-    // 🔥 Run DB calls in parallel
-    const [activeStudents, fees, monthCollection] = await Promise.all([
-      studentModel.aggregate([
-        { $match: { status: "active", isDelete: "false" } },
-        {
-          $group: {
-            _id: "$year",
-            count: { $sum: 1 },
+    const monthCollection = await paymentModel.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+          remark: {
+            $regex: /monthly\s*fee\s*collected/i,
           },
         },
-      ]),
-
-      feeModel.findOne({}, { __v: 0 }),
-
-      paymentModel.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startOfMonth, $lte: endOfMonth },
-            remark: { $regex: /monthly\s*fee\s*collected/i },
-          },
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: { $toDouble: "$amount" } },
+          uniqueStudents: { $addToSet: "$student_id" },
         },
-        {
-          // 🔥 reduce document size before grouping
-          $project: {
-            amount: 1,
-            student_id: 1,
-          },
+      },
+      {
+        $project: {
+          _id: 0,
+          totalAmount: 1,
+          studentCount: { $size: "$uniqueStudents" },
         },
-        {
-          $group: {
-            _id: null,
-            totalAmount: {
-              $sum: {
-                $cond: [
-                  { $isNumber: "$amount" },
-                  "$amount",
-                  { $toDouble: "$amount" },
-                ],
-              },
-            },
-            uniqueStudents: { $addToSet: "$student_id" },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            totalAmount: 1,
-            studentCount: { $size: "$uniqueStudents" },
-          },
-        },
-      ]),
+      },
     ]);
-
-    if (!fees) {
-      return res.status(404).json({ error: "Fees structure not found" });
-    }
-
-    // 🔥 Predict collection (JS is fast here)
-    let predictedCollection = 0;
-    const breakdown = [];
-
-    for (const { _id, count } of activeStudents) {
-      const key = _id.toLowerCase().replace(/ /g, "_");
-      const feeAmount = fees[key] || 0;
-      const total = count * feeAmount;
-
-      predictedCollection += total;
-      breakdown.push({
-        year: _id,
-        count,
-        feeAmount,
-        total,
-      });
-    }
-
+    console.log("Month Collection:", monthCollection);
     const stats =
       monthCollection.length > 0
         ? monthCollection[0]
         : { totalAmount: 0, studentCount: 0 };
+    console.log("This Month Stats:", stats);
 
+    console.log("Predicted Collection:", predictedCollection);
+    console.log("Breakdown:", breakdown);
+    console.log("Active Students:", activeStudents);
     res.json({
       success: true,
-      totalActiveStudents: activeStudents.reduce((s, i) => s + i.count, 0),
+      totalActiveStudents: activeStudents.reduce((sum, s) => sum + s.count, 0),
       predictedCollection,
       breakdown,
-      stats,
+      stats, // detailed info
     });
   } catch (err) {
-    console.error("Predicted collection error:", err);
+    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 };
 
-//controller to fetch all pending history
 export const getPending = async (req, res) => {
   try {
     const history = await paymentModel
