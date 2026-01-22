@@ -1,5 +1,47 @@
 import feesModel from "../models/feesModel.js";
 
+//new fees controller to update fees
+const updateFeesModified = async (req, res) => {
+  try {
+    const incomingData = req.body;
+    const feeData = {};
+
+    // console.log("Incoming Data:", req.body);
+    // Dynamically convert all incoming fields to Numbers
+    Object.keys(incomingData).forEach((key) => {
+      // We skip empty strings and convert valid inputs to numbers
+      if (incomingData[key] !== "") {
+        feeData[key] = Number(incomingData[key]);
+      }
+    });
+
+    // Use findOneAndUpdate with $set to allow adding new fields
+    const updatedFee = await feesModel.findOneAndUpdate(
+      {}, 
+      { $set: feeData }, 
+      {
+        upsert: true, // Create the document if it doesn't exist
+        new: true,    // Return the modified document
+        runValidators: true
+      }
+    );
+
+    res.json({
+      success: true,
+      message: "Fees updated/added successfully",
+      data: updatedFee,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to process fee update",
+      error: error.message,
+    });
+  }
+};
+
+
+//fee controller to update fees
 const updateFees = async (req, res) => {
   //destructuring request body
   try {
@@ -94,4 +136,54 @@ const getFeesByClass = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-export { updateFees, getFees, getFeesByClass };
+
+//add new class record in db
+const addDynamicClass = async (req, res) => {
+  try {
+    const { className, feeAmount } = req.body;
+
+    if (!className || feeAmount === undefined) {
+      return res.status(400).json({ success: false, message: "Class name and fee are required" });
+    }
+
+    // 
+    // We use bracket notation [className] to tell JS to use the string value as the key
+    const updatedFee = await feesModel.findOneAndUpdate(
+      {}, 
+      { $set: { [className]: Number(feeAmount) } }, 
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      message: `Class ${className} added successfully`,
+      data: updatedFee,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to add new class",
+      error: error.message,
+    });
+  }
+};
+//controller to get all class names
+const getAllClassNames = async (req, res) => {
+  try {
+    const feesDoc = await feesModel.findOne({});
+    if (!feesDoc) return res.json({ success: true, classes: [] });
+
+    // Convert Mongoose document to plain object
+    const feesObj = feesDoc.toObject();
+
+    // Filter out internal MongoDB keys and the 'registration' fee
+    const internalKeys = ["_id", "__v", "createdAt", "updatedAt", "registration"];
+    const classes = Object.keys(feesObj).filter(key => !internalKeys.includes(key));
+
+    res.json({ success: true, classes });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export { updateFees, getFees, getFeesByClass , addDynamicClass,updateFeesModified,getAllClassNames };

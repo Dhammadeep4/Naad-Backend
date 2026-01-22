@@ -12,7 +12,7 @@ const feesSchema = new mongoose.Schema({
   visharad_purna: { type: Number, required: true },
   chote_nartak: { type: Number, required: true },
   registration: { type: Number, required: true },
-});
+},{strict: false});
 
 const feesModel = mongoose.model("Fees", feesSchema);
 

@@ -633,7 +633,8 @@ export const getPredictedCollection = async (req, res) => {
       year = year.toLowerCase();
       let y = year.replace(/ /g, "_");
       // console.log("Modified Year:", y);
-      const feeAmount = fees[y] || 0; // match field in feesSchema
+      const feeAmount = fees[y] || 0;
+      console.log("Fee amount:",feeAmount)// match field in feesSchema
       let total = count * feeAmount;
       console.log(`Total for${y} : ${total}`);
       predictedCollection += total;
