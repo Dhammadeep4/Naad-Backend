@@ -188,8 +188,24 @@ export const multiplePaymentRequests = async (req, res) => {
   }
 
   const results = [];
+  const uniqueRequests = [];
+  const seenStudentIds = new Set();
 
   for (const requestData of requests) {
+    const studentKey = String(requestData.student_id);
+    if (seenStudentIds.has(studentKey)) {
+      results.push({
+        student_id: requestData.student_id,
+        success: false,
+        message: "Duplicate student entry in batch carry ignored.",
+      });
+      continue;
+    }
+    seenStudentIds.add(studentKey);
+    uniqueRequests.push(requestData);
+  }
+
+  for (const requestData of uniqueRequests) {
     const { student_id, remark, amount } = requestData;
     const requestStatus = "pending";
     const mode = "pending";
@@ -807,6 +823,39 @@ export const getCompletedHistoryByStudentId = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server Error",
+    });
+  }
+};
+
+
+//delete Payment Request by ID
+
+export const deletePaymentRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Check if the request exists
+    const request = await paymentModel.findById(id);
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment request not found",
+      });
+    }
+
+    // 2. Delete the request
+    await paymentModel.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: "Payment request deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting request:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error while deleting request",
     });
   }
 };

@@ -15,6 +15,7 @@ import {
   getMonthlyPaymentStatsRevised,
   getPredictedCollection,
   multiplePaymentRequests,
+  deletePaymentRequest
 } from "../controllers/paymentController.js";
 
 import verifyRole from "../middlewares/auth.js";
@@ -75,6 +76,13 @@ paymentRouter.post(
   "/multiplePaymentRequest",
   verifyRole(["admin"]),
   multiplePaymentRequests
+);
+
+// Delete a specific payment request
+paymentRouter.delete(
+  "/deleteRequest/:id", 
+  verifyRole(["admin"]), 
+  deletePaymentRequest
 );
 
 export default paymentRouter;
