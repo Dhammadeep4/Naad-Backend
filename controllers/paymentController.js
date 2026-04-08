@@ -1,6 +1,7 @@
 import paymentModel from "../models/paymentModel.js";
 import studentModel from "../models/studentModel.js";
 import feeModel from "../models/feesModel.js";
+import logModel from "../models/logModel.js";
 import ExcelJS from "exceljs";
 import { instance } from "../server.js"; //in this we have passed instance of razorpay created in server.js
 import crypto from "crypto";
@@ -188,8 +189,24 @@ export const multiplePaymentRequests = async (req, res) => {
   }
 
   const results = [];
+  const uniqueRequests = [];
+  const seenStudentIds = new Set();
 
   for (const requestData of requests) {
+    const studentKey = String(requestData.student_id);
+    if (seenStudentIds.has(studentKey)) {
+      results.push({
+        student_id: requestData.student_id,
+        success: false,
+        message: "Duplicate student entry in batch carry ignored.",
+      });
+      continue;
+    }
+    seenStudentIds.add(studentKey);
+    uniqueRequests.push(requestData);
+  }
+
+  for (const requestData of uniqueRequests) {
     const { student_id, remark, amount } = requestData;
     const requestStatus = "pending";
     const mode = "pending";
@@ -633,7 +650,8 @@ export const getPredictedCollection = async (req, res) => {
       year = year.toLowerCase();
       let y = year.replace(/ /g, "_");
       // console.log("Modified Year:", y);
-      const feeAmount = fees[y] || 0; // match field in feesSchema
+      const feeAmount = fees[y] || 0;
+      console.log("Fee amount:",feeAmount)// match field in feesSchema
       let total = count * feeAmount;
       console.log(`Total for${y} : ${total}`);
       predictedCollection += total;
@@ -806,6 +824,55 @@ export const getCompletedHistoryByStudentId = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server Error",
+    });
+  }
+};
+
+
+//delete Payment Request by ID
+
+export const deletePaymentRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ipAddress = req.ip || req.connection.remoteAddress;
+
+    // 1. Check if the request exists
+    const request = await paymentModel.findById(id).populate('student_id', 'firstname lastname');
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment request not found",
+      });
+    }
+
+    // 2. Delete the request
+    await paymentModel.findByIdAndDelete(id);
+
+    // Log successful deletion
+    await logModel.create({
+      action: "DELETE",
+      endpoint: "/api/v1/deletePaymentRequest/:id",
+      details: {
+        requestId: id,
+        student_id: request.student_id._id,
+        studentName: `${request.student_id.firstname} ${request.student_id.lastname}`,
+        amount: request.amount,
+        remark: request.remark,
+        deletedAt: new Date(),
+      },
+      status: "success",
+      ipAddress,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Payment request deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Server error while deleting request",
     });
   }
 };
