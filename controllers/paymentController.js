@@ -1,6 +1,7 @@
 import paymentModel from "../models/paymentModel.js";
 import studentModel from "../models/studentModel.js";
 import feeModel from "../models/feesModel.js";
+import logModel from "../models/logModel.js";
 import ExcelJS from "exceljs";
 import { instance } from "../server.js"; //in this we have passed instance of razorpay created in server.js
 import crypto from "crypto";
@@ -833,9 +834,10 @@ export const getCompletedHistoryByStudentId = async (req, res) => {
 export const deletePaymentRequest = async (req, res) => {
   try {
     const { id } = req.params;
+    const ipAddress = req.ip || req.connection.remoteAddress;
 
     // 1. Check if the request exists
-    const request = await paymentModel.findById(id);
+    const request = await paymentModel.findById(id).populate('student_id', 'firstname lastname');
 
     if (!request) {
       return res.status(404).json({
@@ -847,12 +849,27 @@ export const deletePaymentRequest = async (req, res) => {
     // 2. Delete the request
     await paymentModel.findByIdAndDelete(id);
 
+    // Log successful deletion
+    await logModel.create({
+      action: "DELETE",
+      endpoint: "/api/v1/deletePaymentRequest/:id",
+      details: {
+        requestId: id,
+        student_id: request.student_id._id,
+        studentName: `${request.student_id.firstname} ${request.student_id.lastname}`,
+        amount: request.amount,
+        remark: request.remark,
+        deletedAt: new Date(),
+      },
+      status: "success",
+      ipAddress,
+    });
+
     res.status(200).json({
       success: true,
       message: "Payment request deleted successfully",
     });
   } catch (error) {
-    console.error("Error deleting request:", error.message);
     res.status(500).json({
       success: false,
       message: "Server error while deleting request",
